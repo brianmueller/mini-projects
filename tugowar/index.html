@@ -111,8 +111,10 @@
 
     const positionRef = ref(db, 'position');
 
+    let position;
+
     onValue(positionRef, (snapshot) => {
-        const position = snapshot.val();
+        position = snapshot.val();
         updateUI(position);
     });
 
@@ -136,14 +138,16 @@
     }
   
     function pull(team) {
+        // const position = document.querySelector()
+      
+        let change = 10;
         
-    //   if (position <= 0 || position >= 1000) return;
-    //   if (team === 'red') {
-    //     position -= 50;
-    //   } else if (team === 'blue') {
-    //     position += 50;
-    //   }
-    //   updateUI();
+        if (position <= 0 || position >= 1000) return;
+        if (team === 'red') {
+            change *= -1; // to decrease
+        } 
+        
+        set(positionRef, position+change);
     }
   
     // updateUI();
