@@ -87,40 +87,69 @@
 
   <!-- ... head and body setup same as before ... -->
 
+  <script type="module">
+    // Import the functions you need from the SDKs you need
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
 
-  <script>
-    let position = 500;
+    // TODO: Add SDKs for Firebase products that you want to use
+    // https://firebase.google.com/docs/web/setup#available-libraries
   
-    function updateUI() {
-      const offset = position - 500;
-      document.getElementById('red-score').innerText = offset < 0 ? Math.abs(offset) : 0;
-      document.getElementById('blue-score').innerText = offset > 0 ? offset : 0;
+    // Your web app's Firebase configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyDwJUKYoMcmp-BYLsDyk_giUwjoTYV6G5c",
+      authDomain: "tugowar-b7a15.firebaseapp.com",
+      projectId: "tugowar-b7a15",
+      storageBucket: "tugowar-b7a15.firebasestorage.app",
+      messagingSenderId: "402627181012",
+      appId: "1:402627181012:web:2e17ee614454620bb3be41"
+    };
   
-      const rope = document.getElementById('rope');
-      const ropeContainer = document.querySelector('.rope-container');
-      const containerWidth = ropeContainer.offsetWidth;
-      const maxOffset = containerWidth - 60; // 60 = rope width
-      const percentage = position / 1000;
-      rope.style.left = `${percentage * maxOffset}px`;
-  
-      if (position <= 0) {
-        alert("Red Team Wins!");
-      } else if (position >= 1000) {
-        alert("Blue Team Wins!");
-      }
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const positionRef = ref(db, 'position');
+
+    onValue(positionRef, (snapshot) => {
+        const position = snapshot.val();
+        updateUI(position);
+    });
+
+    function updateUI(position) {
+        const offset = position - 500;
+        document.getElementById('red-score').innerText = offset < 0 ? Math.abs(offset) : 0;
+        document.getElementById('blue-score').innerText = offset > 0 ? offset : 0;
+
+        const rope = document.getElementById('rope');
+        const ropeContainer = document.querySelector('.rope-container');
+        const containerWidth = ropeContainer.offsetWidth;
+        const maxOffset = containerWidth - 60; // rope width
+        const percentage = position / 1000;
+        rope.style.left = `${percentage * maxOffset}px`;
+
+        if (position <= 0) {
+            alert("Red Team Wins!");
+        } else if (position >= 1000) {
+            alert("Blue Team Wins!");
+        }
     }
   
     function pull(team) {
-      if (position <= 0 || position >= 1000) return;
-      if (team === 'red') {
-        position -= 1;
-      } else if (team === 'blue') {
-        position += 1;
-      }
-      updateUI();
+        
+    //   if (position <= 0 || position >= 1000) return;
+    //   if (team === 'red') {
+    //     position -= 50;
+    //   } else if (team === 'blue') {
+    //     position += 50;
+    //   }
+    //   updateUI();
     }
   
-    updateUI();
+    // updateUI();
+
+
+    window.pull = pull;
   </script>
 </body>
 </html>
