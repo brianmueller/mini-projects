@@ -80,6 +80,9 @@
     let playerColor;
     let scores = {};
     let gameFrozen = false;
+    let lastClickTimePerCell = {};
+    const clickCooldown = 500; // ms
+
 
     window.setup = function () {
       createCanvas(gridSize * cellSize, gridSize * cellSize);
@@ -194,35 +197,42 @@
     };
 
     window.mousePressed = function () {
-      let x = floor(mouseX / cellSize);
-      let y = floor(mouseY / cellSize);
+        let x = floor(mouseX / cellSize);
+        let y = floor(mouseY / cellSize);
 
-      if (x < 0 || y < 0 || x >= gridSize || y >= gridSize || gameFrozen) return;
+        if (x < 0 || y < 0 || x >= gridSize || y >= gridSize || gameFrozen) return;
 
-      const key = `${x}_${y}`;
-      const current = grid[key];
+        const key = `${x}_${y}`;
+        const now = Date.now();
 
-      // Prevent score increase if the box is already owned by the player
-      if (current && current.owner === playerName) {
-        console.log("Box already owned by you. No score change.");
-        return;
-      }
+        // Prevent repeated rapid clicking on the same cell
+        if (lastClickTimePerCell[key] && now - lastClickTimePerCell[key] < clickCooldown) {
+            console.log("Clicked too soon on same cell");
+            return;
+        }
+        lastClickTimePerCell[key] = now;
 
-      let updates = {};
-      updates[`grid/${key}`] = {
-        owner: playerName,
-        color: playerColor
-      };
+        const current = grid[key];
 
-      console.log("Mouse pressed at:", x, y, "Key:", key, "Updates:", updates);
+        if (current && current.owner === playerName) {
+            console.log("Box already owned by you. No score change.");
+            return;
+        }
 
-      if (current && current.owner && current.owner !== playerName) {
-        updates[`players/${current.owner}/score`] = Math.max((scores[current.owner]?.score || 1) - 1, 0);
-      }
+        let updates = {};
+        updates[`grid/${key}`] = {
+            owner: playerName,
+            color: playerColor
+        };
 
-      updates[`players/${playerName}/score`] = (scores[playerName]?.score || 0) + 1;
-      update(ref(db), updates);
-    };
+        if (current && current.owner && current.owner !== playerName) {
+            updates[`players/${current.owner}/score`] = Math.max((scores[current.owner]?.score || 1) - 1, 0);
+        }
+
+        updates[`players/${playerName}/score`] = (scores[playerName]?.score || 0) + 1;
+        update(ref(db), updates);
+        };
+
 
     function getRandomColor() {
       return '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
