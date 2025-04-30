@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Tug o' War</title>
+  <!-- <link rel="stylesheet" href="style.css" /> -->
+  <style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #f0f0f0;
+        margin: 0;
+        padding: 2rem;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+    }
+
+    .game-container {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 90%;
+        max-width: 900px;
+    }
+
+    .team {
+        width: 20%;
+        text-align: center;
+    }
+
+    .red-team {
+        color: #b00000;
+    }
+
+    .blue-team {
+        color: #0000b0;
+    }
+
+    button {
+        padding: 0.5rem 1rem;
+        margin-top: 1rem;
+        font-size: 1rem;
+        cursor: pointer;
+    }
+
+    .rope-container {
+        position: relative;
+        flex: 1;
+        height: 30px;
+        background: #ddd;
+        margin: 0 1rem;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+
+    .rope {
+        position: absolute;
+        top: 0;
+        width: 60px;
+        height: 100%;
+        background: linear-gradient(to right, red, blue);
+        border-radius: 10px;
+        transition: left 0.2s ease;
+    }
+  </style>
+</head>
+<body>
+  <div class="game-container">
+    <div class="team red-team">
+      <h2>Red Team</h2>
+      <p class="score" id="red-score">0</p>
+      <button onclick="pull('red')">Pull</button>
+    </div>
+
+    <div class="rope-container">
+      <div class="rope" id="rope"></div>
+    </div>
+
+    <div class="team blue-team">
+      <h2>Blue Team</h2>
+      <p class="score" id="blue-score">0</p>
+      <button onclick="pull('blue')">Pull</button>
+    </div>
+  </div>
+
+  <!-- ... head and body setup same as before ... -->
+
+
+  <script>
+    let position = 500;
+  
+    function updateUI() {
+      const offset = position - 500;
+      document.getElementById('red-score').innerText = offset < 0 ? Math.abs(offset) : 0;
+      document.getElementById('blue-score').innerText = offset > 0 ? offset : 0;
+  
+      const rope = document.getElementById('rope');
+      const ropeContainer = document.querySelector('.rope-container');
+      const containerWidth = ropeContainer.offsetWidth;
+      const maxOffset = containerWidth - 60; // 60 = rope width
+      const percentage = position / 1000;
+      rope.style.left = `${percentage * maxOffset}px`;
+  
+      if (position <= 0) {
+        alert("Red Team Wins!");
+      } else if (position >= 1000) {
+        alert("Blue Team Wins!");
+      }
+    }
+  
+    function pull(team) {
+      if (position <= 0 || position >= 1000) return;
+      if (team === 'red') {
+        position -= 1;
+      } else if (team === 'blue') {
+        position += 1;
+      }
+      updateUI();
+    }
+  
+    updateUI();
+  </script>
+</body>
+</html>
