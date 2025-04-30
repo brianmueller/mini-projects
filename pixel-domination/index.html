@@ -196,16 +196,25 @@
     window.mousePressed = function () {
       let x = floor(mouseX / cellSize);
       let y = floor(mouseY / cellSize);
+
       if (x < 0 || y < 0 || x >= gridSize || y >= gridSize || gameFrozen) return;
 
       const key = `${x}_${y}`;
       const current = grid[key];
+
+      // Prevent score increase if the box is already owned by the player
+      if (current && current.owner === playerName) {
+        console.log("Box already owned by you. No score change.");
+        return;
+      }
 
       let updates = {};
       updates[`grid/${key}`] = {
         owner: playerName,
         color: playerColor
       };
+
+      console.log("Mouse pressed at:", x, y, "Key:", key, "Updates:", updates);
 
       if (current && current.owner && current.owner !== playerName) {
         updates[`players/${current.owner}/score`] = Math.max((scores[current.owner]?.score || 1) - 1, 0);
