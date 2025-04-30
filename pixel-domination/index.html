@@ -24,6 +24,29 @@
     canvas {
       display: block;
     }
+    #playerGameStatus {
+      position: fixed;
+      bottom: 10px;
+      left: 220px;
+      background: #fff3cd;
+      color: #856404;
+      border: 1px solid #ffeeba;
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-family: sans-serif;
+      font-weight: bold;
+    }
+    .canvas-overlay {
+      position: absolute;
+      top: 0;
+      left: 200px;
+      pointer-events: none;
+      width: calc(100% - 200px);
+      height: 100vh;
+      background-color: rgba(255, 255, 255, 0.5);
+      display: none;
+      z-index: 10;
+    }
   </style>
 </head>
 <body>
@@ -31,46 +54,50 @@
     <h2>Leaderboard</h2>
     <ul id="scores"></ul>
   </div>
+  <p id="playerGameStatus">Status: Loading...</p>
+  <div class="canvas-overlay" id="canvasOverlay"></div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getDatabase, ref, set, onValue, update } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
 
-    // const firebaseConfig = {
-    //   apiKey: "YOUR_API_KEY",
-    //   authDomain: "YOUR_PROJECT.firebaseapp.com",
-    //   databaseURL: "https://YOUR_PROJECT.firebaseio.com",
-    //   projectId: "YOUR_PROJECT_ID",
-    //   storageBucket: "YOUR_PROJECT.appspot.com",
-    //   messagingSenderId: "YOUR_SENDER_ID",
-    //   appId: "YOUR_APP_ID"
-    // };
     const firebaseConfig = {
-        apiKey: "AIzaSyA_KkBGtpZzgfYn1PKz5IEoz_676fWQVkw",
-        authDomain: "mueller-games.firebaseapp.com",
-        projectId: "mueller-games",
-        storageBucket: "mueller-games.firebasestorage.app",
-        messagingSenderId: "265078706415",
-        appId: "1:265078706415:web:3bd76e13cd995bd3f90b1a"
+      apiKey: "AIzaSyA_KkBGtpZzgfYn1PKz5IEoz_676fWQVkw",
+      authDomain: "mueller-games.firebaseapp.com",
+      projectId: "mueller-games",
+      storageBucket: "mueller-games.firebasestorage.app",
+      messagingSenderId: "265078706415",
+      appId: "1:265078706415:web:3bd76e13cd995bd3f90b1a"
     };
 
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
-    // Grid config
     const gridSize = 20;
     const cellSize = 40;
     let grid = {};
     let playerName;
     let playerColor;
     let scores = {};
+    let gameFrozen = false;
 
     window.setup = function () {
       createCanvas(gridSize * cellSize, gridSize * cellSize);
-      playerName = prompt("Enter your name").trim();
+
+      // Prompt and validate player name
+      while (!playerName || playerName.trim().length === 0) {
+        playerName = prompt("Enter your name:");
+        if (playerName === null) {
+          alert("Game canceled.");
+          noLoop();
+          return;
+        }
+      }
+      playerName = playerName.trim();
+      window.playerName = playerName;
       playerColor = getRandomColor();
 
-      // Register the player
+      // Register player
       update(ref(db, `players/${playerName}`), {
         color: playerColor,
         score: 0
@@ -83,13 +110,43 @@
         }
       });
 
-      // Listen for player scores
+      // Listen for score updates
       onValue(ref(db, 'players'), (snapshot) => {
         if (snapshot.exists()) {
           scores = snapshot.val();
           updateLeaderboard();
         }
       });
+
+      // Listen for game frozen state (shared by all)
+      onValue(ref(db, "gameState/frozen"), (snap) => {
+        gameFrozen = snap.val() === true;
+        const statusText = gameFrozen ? "Frozen ❄️" : "Active 🔥";
+
+        // All players get visual and text indication
+        const playerStatusEl = document.getElementById("playerGameStatus");
+        if (playerStatusEl) {
+          playerStatusEl.textContent = "Status: " + statusText;
+        }
+
+        const overlay = document.getElementById("canvasOverlay");
+        overlay.style.display = gameFrozen ? "block" : "none";
+
+        // Admin also updates their panel
+        if (playerName.toLowerCase() === "admin") {
+          document.getElementById("gameStatus").innerText = statusText;
+        }
+      });
+
+      // Admin UI
+      if (playerName.toLowerCase() === "admin") {
+        const panel = document.getElementById("adminPanel");
+        panel.style.display = "block";
+
+        document.getElementById("freezeBtn").addEventListener("click", () => freezeGame());
+        document.getElementById("unfreezeBtn").addEventListener("click", () => unfreezeGame());
+        document.getElementById("resetBtn").addEventListener("click", () => resetGame());
+      }
     };
 
     window.draw = function () {
@@ -116,7 +173,7 @@
     window.mousePressed = function () {
       let x = floor(mouseX / cellSize);
       let y = floor(mouseY / cellSize);
-      if (x < 0 || y < 0 || x >= gridSize || y >= gridSize) return;
+      if (x < 0 || y < 0 || x >= gridSize || y >= gridSize || gameFrozen) return;
 
       const key = `${x}_${y}`;
       const current = grid[key];
@@ -132,7 +189,6 @@
       }
 
       updates[`players/${playerName}/score`] = (scores[playerName]?.score || 0) + 1;
-
       update(ref(db), updates);
     };
 
@@ -156,9 +212,32 @@
       }
     }
 
+    // Admin functions
+    window.freezeGame = function () {
+      set(ref(db, "gameState"), { frozen: true });
+    };
 
+    window.unfreezeGame = function () {
+      set(ref(db, "gameState"), { frozen: false });
+    };
 
-    
+    window.resetGame = function () {
+      if (confirm("Are you sure you want to reset the game? This cannot be undone.")) {
+        update(ref(db), {
+          grid: null,
+          players: null,
+          gameState: { frozen: false }
+        });
+      }
+    };
   </script>
+
+  <div id="adminPanel" style="position: fixed; top: 10px; right: 10px; background: #fff; padding: 10px; border: 1px solid #ccc; display: none;">
+    <strong>Admin Controls</strong><br><br>
+    <button id="freezeBtn">Freeze</button>
+    <button id="unfreezeBtn">Unfreeze</button>
+    <button id="resetBtn">Reset</button>
+    <p>Status: <span id="gameStatus">...</span></p>
+  </div>
 </body>
 </html>
