@@ -213,10 +213,10 @@
 
         const current = grid[key];
 
-        // if (current && current.owner === playerName) {
+        if (current && current.owner === playerName) {
         //     console.log("Box already owned by you. No score change.");
-        //     return;
-        // }
+            return;
+        }
 
         // ✅ Check if player is missing in `scores`, re-register if needed
         if (!scores[playerName]) {
