@@ -73,8 +73,8 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
-    const gridSize = 20;
-    const cellSize = 40;
+    const gridSize = 100;
+    const cellSize = 10;
     let grid = {};
     let playerName;
     let playerColor;
@@ -188,7 +188,7 @@
             fill(textColor);
             textSize(10);
             textAlign(CENTER, CENTER);
-            text(box.owner, x * cellSize + cellSize / 2, y * cellSize + cellSize / 2);
+            // text(box.owner, x * cellSize + cellSize / 2, y * cellSize + cellSize / 2);
           }
  
 
@@ -196,7 +196,7 @@
       }
     };
 
-    window.mouseDragged = function () {
+    window.mouseMoved = function () {
         let x = floor(mouseX / cellSize);
         let y = floor(mouseY / cellSize);
 
@@ -205,18 +205,26 @@
         const key = `${x}_${y}`;
         const now = Date.now();
 
-        // Prevent repeated rapid clicking on the same cell
-        if (lastClickTimePerCell[key] && now - lastClickTimePerCell[key] < clickCooldown) {
-            console.log("Clicked too soon on same cell");
-            return;
-        }
-        lastClickTimePerCell[key] = now;
+        // if (lastClickTimePerCell[key] && now - lastClickTimePerCell[key] < clickCooldown) {
+        //     console.log("Clicked too soon on same cell");
+        //     return;
+        // }
+        // lastClickTimePerCell[key] = now;
 
         const current = grid[key];
 
-        if (current && current.owner === playerName) {
-            console.log("Box already owned by you. No score change.");
-            return;
+        // if (current && current.owner === playerName) {
+        //     console.log("Box already owned by you. No score change.");
+        //     return;
+        // }
+
+        // ✅ Check if player is missing in `scores`, re-register if needed
+        if (!scores[playerName]) {
+            console.log("Player not registered — re-registering...");
+            update(ref(db, `players/${playerName}`), {
+            color: playerColor,
+            score: 0
+            });
         }
 
         let updates = {};
@@ -230,8 +238,10 @@
         }
 
         updates[`players/${playerName}/score`] = (scores[playerName]?.score || 0) + 1;
+
         update(ref(db), updates);
-        };
+    };
+
 
 
     function getRandomColor() {
@@ -256,12 +266,20 @@
         .map(([name, data]) => ({ name, score: data.score || 0, color: data.color }))
         .sort((a, b) => b.score - a.score);
 
-      for (let player of sorted) {
-        const li = document.createElement('li');
-        li.textContent = `${player.name}: ${player.score}`;
-        li.style.color = player.color;
-        scoreList.appendChild(li);
-      }
+        for (let player of sorted) {
+            const li = document.createElement('li');
+            li.textContent = `${player.name}: ${player.score}`;
+
+            // Fallback to local color if color is missing
+            if (player.color) {
+                li.style.color = player.color;
+            } else if (player.name === playerName) {
+                li.style.color = playerColor;
+            }
+
+            scoreList.appendChild(li);
+        }
+
     }
 
     // Admin functions
@@ -276,7 +294,6 @@
 
     window.resetGame = function () {
         if (confirm("Are you sure you want to reset the game? This cannot be undone.")) {
-            // First, retrieve the existing adminToken
             const tokenRef = ref(db, "gameState/adminToken");
             onValue(tokenRef, (snap) => {
             const existingToken = snap.val();
@@ -289,11 +306,13 @@
                 adminToken: existingToken
                 }
             });
-            }, {
-            onlyOnce: true
-            });
+
+            // ✅ Clear local memory of player scores
+            scores = {};
+            }, { onlyOnce: true });
         }
     };
+
 
   </script>
 
