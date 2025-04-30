@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Pixel Domination Game</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.min.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      display: flex;
+    }
+    #leaderboard {
+      padding: 10px;
+      background: #f7f7f7;
+      width: 200px;
+      height: 100vh;
+      overflow-y: auto;
+      box-shadow: 2px 0px 5px rgba(0, 0, 0, 0.1);
+    }
+    #leaderboard h2 {
+      margin-top: 0;
+    }
+    canvas {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div id="leaderboard">
+    <h2>Leaderboard</h2>
+    <ul id="scores"></ul>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getDatabase, ref, set, onValue, update } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
+
+    // const firebaseConfig = {
+    //   apiKey: "YOUR_API_KEY",
+    //   authDomain: "YOUR_PROJECT.firebaseapp.com",
+    //   databaseURL: "https://YOUR_PROJECT.firebaseio.com",
+    //   projectId: "YOUR_PROJECT_ID",
+    //   storageBucket: "YOUR_PROJECT.appspot.com",
+    //   messagingSenderId: "YOUR_SENDER_ID",
+    //   appId: "YOUR_APP_ID"
+    // };
+    const firebaseConfig = {
+        apiKey: "AIzaSyA_KkBGtpZzgfYn1PKz5IEoz_676fWQVkw",
+        authDomain: "mueller-games.firebaseapp.com",
+        projectId: "mueller-games",
+        storageBucket: "mueller-games.firebasestorage.app",
+        messagingSenderId: "265078706415",
+        appId: "1:265078706415:web:3bd76e13cd995bd3f90b1a"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // Grid config
+    const gridSize = 20;
+    const cellSize = 40;
+    let grid = {};
+    let playerName;
+    let playerColor;
+    let scores = {};
+
+    window.setup = function () {
+      createCanvas(gridSize * cellSize, gridSize * cellSize);
+      playerName = prompt("Enter your name").trim();
+      playerColor = getRandomColor();
+
+      // Register the player
+      update(ref(db, `players/${playerName}`), {
+        color: playerColor,
+        score: 0
+      });
+
+      // Listen for grid updates
+      onValue(ref(db, 'grid'), (snapshot) => {
+        if (snapshot.exists()) {
+          grid = snapshot.val();
+        }
+      });
+
+      // Listen for player scores
+      onValue(ref(db, 'players'), (snapshot) => {
+        if (snapshot.exists()) {
+          scores = snapshot.val();
+          updateLeaderboard();
+        }
+      });
+    };
+
+    window.draw = function () {
+      background(255);
+      stroke(0);
+
+      for (let y = 0; y < gridSize; y++) {
+        for (let x = 0; x < gridSize; x++) {
+          const key = `${x}_${y}`;
+          const box = grid[key];
+          fill(box ? box.color : '#eee');
+          rect(x * cellSize, y * cellSize, cellSize, cellSize);
+
+          if (box && box.owner) {
+            fill(0);
+            textSize(10);
+            textAlign(CENTER, CENTER);
+            text(box.owner, x * cellSize + cellSize / 2, y * cellSize + cellSize / 2);
+          }
+        }
+      }
+    };
+
+    window.mousePressed = function () {
+      let x = floor(mouseX / cellSize);
+      let y = floor(mouseY / cellSize);
+      if (x < 0 || y < 0 || x >= gridSize || y >= gridSize) return;
+
+      const key = `${x}_${y}`;
+      const current = grid[key];
+
+      let updates = {};
+      updates[`grid/${key}`] = {
+        owner: playerName,
+        color: playerColor
+      };
+
+      if (current && current.owner && current.owner !== playerName) {
+        updates[`players/${current.owner}/score`] = Math.max((scores[current.owner]?.score || 1) - 1, 0);
+      }
+
+      updates[`players/${playerName}/score`] = (scores[playerName]?.score || 0) + 1;
+
+      update(ref(db), updates);
+    };
+
+    function getRandomColor() {
+      return '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
+    }
+
+    function updateLeaderboard() {
+      const scoreList = document.getElementById('scores');
+      scoreList.innerHTML = '';
+
+      const sorted = Object.entries(scores)
+        .map(([name, data]) => ({ name, score: data.score || 0, color: data.color }))
+        .sort((a, b) => b.score - a.score);
+
+      for (let player of sorted) {
+        const li = document.createElement('li');
+        li.textContent = `${player.name}: ${player.score}`;
+        li.style.color = player.color;
+        scoreList.appendChild(li);
+      }
+    }
+
+
+
+    
+  </script>
+</body>
+</html>
