@@ -1,327 +1,424 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-  <meta charset="UTF-8">
-  <title>Pixel Domination Game</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.min.js"></script>
-  <style>
-    body {
-      font-family: sans-serif;
-      margin: 0;
-      display: flex;
-    }
-    #leaderboard {
-      padding: 10px;
-      background: #f7f7f7;
-      width: 200px;
-      height: 100vh;
-      overflow-y: auto;
-      box-shadow: 2px 0px 5px rgba(0, 0, 0, 0.1);
-    }
-    #leaderboard h2 {
-      margin-top: 0;
-    }
-    canvas {
-      display: block;
-    }
-    #playerGameStatus {
-      position: fixed;
-      bottom: 10px;
-      left: 220px;
-      background: #fff3cd;
-      color: #856404;
-      border: 1px solid #ffeeba;
-      padding: 5px 10px;
-      border-radius: 5px;
-      font-family: sans-serif;
-      font-weight: bold;
-    }
-    .canvas-overlay {
-      position: absolute;
-      top: 0;
-      left: 200px;
-      pointer-events: none;
-      width: calc(100% - 200px);
-      height: 100vh;
-      background-color: rgba(255, 255, 255, 0.5);
-      display: none;
-      z-index: 10;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <title>Pixel Domination Game</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.min.js"></script>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 0;
+            display: flex;
+        }
+
+        #leaderboard {
+            padding: 10px;
+            background: #f7f7f7;
+            width: 200px;
+            height: 100vh;
+            overflow-y: auto;
+            box-shadow: 2px 0px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        #leaderboard h2 {
+            margin-top: 0;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #playerGameStatus {
+            position: fixed;
+            bottom: 10px;
+            left: 220px;
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-family: sans-serif;
+            font-weight: bold;
+        }
+
+        .canvas-overlay {
+            position: absolute;
+            top: 0;
+            left: 200px;
+            pointer-events: none;
+            width: calc(100% - 200px);
+            height: 100vh;
+            background-color: rgba(255, 255, 255, 0.5);
+            display: none;
+            z-index: 10;
+        }
+    </style>
 </head>
+
 <body>
-  <div id="leaderboard">
-    <h2>Leaderboard</h2>
-    <ul id="scores"></ul>
-  </div>
-  <p id="playerGameStatus">Status: Loading...</p>
-  <div class="canvas-overlay" id="canvasOverlay"></div>
+    <div id="leaderboard">
+        <h2>Leaderboard</h2>
+        <ul id="scores"></ul>
+    </div>
+    <p id="playerGameStatus">Status: Loading...</p>
+    <div class="canvas-overlay" id="canvasOverlay"></div>
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getDatabase, ref, set, onValue, update } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getDatabase, ref, set, onValue, update } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyA_KkBGtpZzgfYn1PKz5IEoz_676fWQVkw",
-      authDomain: "mueller-games.firebaseapp.com",
-      projectId: "mueller-games",
-      storageBucket: "mueller-games.firebasestorage.app",
-      messagingSenderId: "265078706415",
-      appId: "1:265078706415:web:3bd76e13cd995bd3f90b1a"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
-
-    const gridSize = 50;
-    const cellSize = 20;
-    let grid = {};
-    let playerName;
-    let playerColor;
-    let scores = {};
-    let gameFrozen = false;
-    let lastClickTimePerCell = {};
-    const clickCooldown = 500; // ms
-
-
-    window.setup = function () {
-      createCanvas(gridSize * cellSize, gridSize * cellSize);
-
-      // Prompt and validate player name
-      while (!playerName || playerName.trim().length === 0) {
-        playerName = prompt("Enter your name:");
-        if (playerName === null) {
-          alert("Game canceled.");
-          noLoop();
-          return;
-        }
-      }
-      playerName = playerName.trim();
-      window.playerName = playerName;
-      playerColor = getRandomColor();
-
-      // Register player
-      update(ref(db, `players/${playerName}`), {
-        color: playerColor,
-        score: 0
-      });
-
-      // Listen for grid updates
-      onValue(ref(db, 'grid'), (snapshot) => {
-        if (snapshot.exists()) {
-          grid = snapshot.val();
-        }
-      });
-
-      // Listen for score updates
-      onValue(ref(db, 'players'), (snapshot) => {
-        if (snapshot.exists()) {
-          scores = snapshot.val();
-          updateLeaderboard();
-        }
-      });
-
-      // Listen for game frozen state (shared by all)
-      onValue(ref(db, "gameState/frozen"), (snap) => {
-        gameFrozen = snap.val() === true;
-        const statusText = gameFrozen ? "Frozen ❄️" : "Active 🔥";
-
-        // All players get visual and text indication
-        const playerStatusEl = document.getElementById("playerGameStatus");
-        if (playerStatusEl) {
-          playerStatusEl.textContent = "Status: " + statusText;
-        }
-
-        const overlay = document.getElementById("canvasOverlay");
-        overlay.style.display = gameFrozen ? "block" : "none";
-
-        // Admin also updates their panel
-        if (playerName.toLowerCase() === "admin") {
-          document.getElementById("gameStatus").innerText = statusText;
-        }
-      });
-
-      // Admin UI
-      if (playerName.toLowerCase() === "admin") {
-        const token = prompt("Enter admin token:");
-        if (!token) {
-            alert("Admin token is required.");
-            noLoop();
-            return;
-        }
-
-        const tokenRef = ref(db, "gameState/adminToken");
-        onValue(tokenRef, (snap) => {
-            const storedToken = snap.val();
-            if (token === storedToken) {
-                const panel = document.getElementById("adminPanel");
-                panel.style.display = "block";
-
-                document.getElementById("freezeBtn").addEventListener("click", () => freezeGame());
-                document.getElementById("unfreezeBtn").addEventListener("click", () => unfreezeGame());
-                document.getElementById("resetBtn").addEventListener("click", () => resetGame());
-            } else {
-                alert("Invalid admin token.");
-                noLoop();
-                location.reload();
-            }
-        }, {
-            onlyOnce: true
-        });
-      }
-
-    };
-
-    window.draw = function () {
-      background(255);
-      stroke(0);
-
-      for (let y = 0; y < gridSize; y++) {
-        for (let x = 0; x < gridSize; x++) {
-          const key = `${x}_${y}`;
-          const box = grid[key];
-          fill(box ? box.color : '#eee');
-          rect(x * cellSize, y * cellSize, cellSize, cellSize);
-
-          if (box && box.owner) {
-            const textColor = isColorDark(box.color) ? 255 : 0;
-            fill(textColor);
-            textSize(10);
-            textAlign(CENTER, CENTER);
-            // text(box.owner, x * cellSize + cellSize / 2, y * cellSize + cellSize / 2);
-          }
- 
-
-        }
-      }
-    };
-
-    window.mouseMoved = function () {
-        let x = floor(mouseX / cellSize);
-        let y = floor(mouseY / cellSize);
-
-        if (x < 0 || y < 0 || x >= gridSize || y >= gridSize || gameFrozen) return;
-
-        const key = `${x}_${y}`;
-        const now = Date.now();
-
-        // if (lastClickTimePerCell[key] && now - lastClickTimePerCell[key] < clickCooldown) {
-        //     console.log("Clicked too soon on same cell");
-        //     return;
-        // }
-        // lastClickTimePerCell[key] = now;
-
-        const current = grid[key];
-
-        if (current && current.owner === playerName) {
-        //     console.log("Box already owned by you. No score change.");
-            return;
-        }
-
-        // ✅ Check if player is missing in `scores`, re-register if needed
-        if (!scores[playerName]) {
-            console.log("Player not registered — re-registering...");
-            update(ref(db, `players/${playerName}`), {
-            color: playerColor,
-            score: 0
-            });
-        }
-
-        let updates = {};
-        updates[`grid/${key}`] = {
-            owner: playerName,
-            color: playerColor
+        const firebaseConfig = {
+            apiKey: "AIzaSyA_KkBGtpZzgfYn1PKz5IEoz_676fWQVkw",
+            authDomain: "mueller-games.firebaseapp.com",
+            projectId: "mueller-games",
+            storageBucket: "mueller-games.firebasestorage.app",
+            messagingSenderId: "265078706415",
+            appId: "1:265078706415:web:3bd76e13cd995bd3f90b1a"
         };
 
-        if (current && current.owner && current.owner !== playerName) {
-            updates[`players/${current.owner}/score`] = Math.max((scores[current.owner]?.score || 1) - 1, 0);
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        const gridSize = 50;
+        const cellSize = 20;
+        let grid = {};
+        let playerName;
+        let playerColor;
+        let scores = {};
+        let gameFrozen = false;
+
+        let sprite = {
+            x: Math.floor(gridSize / 2),
+            y: Math.floor(gridSize / 2),
+            direction: getRandomDirection() // Random initial direction
+        };
+        function getRandomDirection() {
+            const directions = ['up', 'down', 'left', 'right'];
+            return directions[Math.floor(Math.random() * directions.length)];
         }
 
-        updates[`players/${playerName}/score`] = (scores[playerName]?.score || 0) + 1;
 
-        update(ref(db), updates);
-    };
-
-
-
-    function getRandomColor() {
-      return '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
-    }
-
-    function isColorDark(hex) {
-        const r = parseInt(hex.substr(1, 2), 16);
-        const g = parseInt(hex.substr(3, 2), 16);
-        const b = parseInt(hex.substr(5, 2), 16);
-        // Perceived brightness formula
-        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-        return brightness < 128;
-    }
+        // let currentDirection = null; // 'up', 'down', 'left', 'right'
+        let moveCooldown = 50;
+        let lastMoveTime = 0;
 
 
-    function updateLeaderboard() {
-      const scoreList = document.getElementById('scores');
-      scoreList.innerHTML = '';
+        let lastClickTimePerCell = {};
+        const clickCooldown = 500; // ms
 
-      const sorted = Object.entries(scores)
-        .map(([name, data]) => ({ name, score: data.score || 0, color: data.color }))
-        .sort((a, b) => b.score - a.score);
 
-        for (let player of sorted) {
-            const li = document.createElement('li');
-            li.textContent = `${player.name}: ${player.score}`;
+        window.setup = function () {
+            createCanvas(gridSize * cellSize, gridSize * cellSize);
 
-            // Fallback to local color if color is missing
-            if (player.color) {
-                li.style.color = player.color;
-            } else if (player.name === playerName) {
-                li.style.color = playerColor;
+            // Prompt and validate player name
+            while (!playerName || playerName.trim().length === 0) {
+                playerName = prompt("Enter your name:");
+                if (playerName === null) {
+                    alert("Game canceled.");
+                    noLoop();
+                    return;
+                }
             }
+            playerName = playerName.trim();
+            window.playerName = playerName;
+            playerColor = getRandomColor();
 
-            scoreList.appendChild(li);
-        }
+            // Register player
+            update(ref(db, `players/${playerName}`), {
+                color: playerColor,
+                score: 0
+            });
 
-    }
-
-    // Admin functions
-    window.freezeGame = function () {
-        update(ref(db, "gameState"), { frozen: true });
-    };
-
-    window.unfreezeGame = function () {
-        update(ref(db, "gameState"), { frozen: false });
-    };
-
-
-    window.resetGame = function () {
-        if (confirm("Are you sure you want to reset the game? This cannot be undone.")) {
-            const tokenRef = ref(db, "gameState/adminToken");
-            onValue(tokenRef, (snap) => {
-            const existingToken = snap.val();
-
-            update(ref(db), {
-                grid: {},
-                players: null,
-                gameState: {
-                frozen: false,
-                adminToken: existingToken
+            // Listen for grid updates
+            onValue(ref(db, 'grid'), (snapshot) => {
+                if (snapshot.exists()) {
+                    grid = snapshot.val();
                 }
             });
 
-            // ✅ Clear local memory of player scores
-            scores = {};
-            }, { onlyOnce: true });
+            // Listen for score updates
+            onValue(ref(db, 'players'), (snapshot) => {
+                if (snapshot.exists()) {
+                    scores = snapshot.val();
+                    updateLeaderboard();
+                }
+            });
+
+            // Listen for game frozen state (shared by all)
+            onValue(ref(db, "gameState/frozen"), (snap) => {
+                gameFrozen = snap.val() === true;
+                const statusText = gameFrozen ? "Frozen ❄️" : "Active 🔥";
+
+                // All players get visual and text indication
+                const playerStatusEl = document.getElementById("playerGameStatus");
+                if (playerStatusEl) {
+                    playerStatusEl.textContent = "Status: " + statusText;
+                }
+
+                const overlay = document.getElementById("canvasOverlay");
+                overlay.style.display = gameFrozen ? "block" : "none";
+
+                // Admin also updates their panel
+                if (playerName.toLowerCase() === "admin") {
+                    document.getElementById("gameStatus").innerText = statusText;
+                }
+            });
+
+            // Admin UI
+            if (playerName.toLowerCase() === "admin") {
+                const token = prompt("Enter admin token:");
+                if (!token) {
+                    alert("Admin token is required.");
+                    noLoop();
+                    return;
+                }
+
+                const tokenRef = ref(db, "gameState/adminToken");
+                onValue(tokenRef, (snap) => {
+                    const storedToken = snap.val();
+                    if (token === storedToken) {
+                        const panel = document.getElementById("adminPanel");
+                        panel.style.display = "block";
+
+                        document.getElementById("freezeBtn").addEventListener("click", () => freezeGame());
+                        document.getElementById("unfreezeBtn").addEventListener("click", () => unfreezeGame());
+                        document.getElementById("resetBtn").addEventListener("click", () => resetGame());
+                    } else {
+                        alert("Invalid admin token.");
+                        noLoop();
+                        location.reload();
+                    }
+                }, {
+                    onlyOnce: true
+                });
+            }
+
+        };
+
+        window.draw = function () {
+            background(255);
+            stroke(0);
+
+            // Draw the grid
+            for (let y = 0; y < gridSize; y++) {
+                for (let x = 0; x < gridSize; x++) {
+                    const key = `${x}_${y}`;
+                    const box = grid[key];
+                    fill(box ? box.color : '#eee');
+                    rect(x * cellSize, y * cellSize, cellSize, cellSize);
+                }
+            }
+
+            if (!gameFrozen && sprite.direction) {
+                const now = millis();
+                if (now - lastMoveTime >= moveCooldown) {
+                    lastMoveTime = now;
+                    moveSprite();
+                }
+            }
+
+
+            // Draw player sprite
+            fill(0, 127); // Semi-transparent black
+            noStroke();
+            ellipse(
+                sprite.x * cellSize + cellSize / 2,
+                sprite.y * cellSize + cellSize / 2,
+                cellSize * 2, // Make it larger than the cell
+                cellSize * 2
+            );
+        };
+
+        function moveSprite() {
+            if (sprite.direction === 'up') sprite.y--;
+            if (sprite.direction === 'down') sprite.y++;
+            if (sprite.direction === 'left') sprite.x--;
+            if (sprite.direction === 'right') sprite.x++;
+
+            // Wrap around
+            if (sprite.x < 0) sprite.x = gridSize - 1;
+            if (sprite.x >= gridSize) sprite.x = 0;
+            if (sprite.y < 0) sprite.y = gridSize - 1;
+            if (sprite.y >= gridSize) sprite.y = 0;
+
+            claimCell(sprite.x, sprite.y);
         }
-    };
 
 
-  </script>
+        function claimCell(x, y) {
+            const key = `${x}_${y}`;
+            const current = grid[key];
 
-  <div id="adminPanel" style="position: fixed; top: 10px; right: 10px; background: #fff; padding: 10px; border: 1px solid #ccc; display: none;">
-    <strong>Admin Controls</strong><br><br>
-    <button id="freezeBtn">Freeze</button>
-    <button id="unfreezeBtn">Unfreeze</button>
-    <button id="resetBtn">Reset</button>
-    <p>Status: <span id="gameStatus">...</span></p>
-  </div>
+            if (current && current.owner === playerName) return;
+
+            if (!scores[playerName]) {
+                update(ref(db, `players/${playerName}`), {
+                    color: playerColor,
+                    score: 0
+                });
+            }
+
+            let updates = {};
+            updates[`grid/${key}`] = {
+                owner: playerName,
+                color: playerColor
+            };
+
+            if (current && current.owner && current.owner !== playerName) {
+                updates[`players/${current.owner}/score`] = Math.max((scores[current.owner]?.score || 1) - 1, 0);
+            }
+
+            updates[`players/${playerName}/score`] = (scores[playerName]?.score || 0) + 1;
+
+            update(ref(db), updates);
+        }
+
+
+        // window.mouseMoved = function () {
+        //     let x = floor(mouseX / cellSize);
+        //     let y = floor(mouseY / cellSize);
+
+        //     if (x < 0 || y < 0 || x >= gridSize || y >= gridSize || gameFrozen) return;
+
+        //     const key = `${x}_${y}`;
+        //     const now = Date.now();
+
+        //     // if (lastClickTimePerCell[key] && now - lastClickTimePerCell[key] < clickCooldown) {
+        //     //     console.log("Clicked too soon on same cell");
+        //     //     return;
+        //     // }
+        //     // lastClickTimePerCell[key] = now;
+
+        //     const current = grid[key];
+
+        //     if (current && current.owner === playerName) {
+        //         //     console.log("Box already owned by you. No score change.");
+        //         return;
+        //     }
+
+        //     // ✅ Check if player is missing in `scores`, re-register if needed
+        //     if (!scores[playerName]) {
+        //         console.log("Player not registered — re-registering...");
+        //         update(ref(db, `players/${playerName}`), {
+        //             color: playerColor,
+        //             score: 0
+        //         });
+        //     }
+
+        //     let updates = {};
+        //     updates[`grid/${key}`] = {
+        //         owner: playerName,
+        //         color: playerColor
+        //     };
+
+        //     if (current && current.owner && current.owner !== playerName) {
+        //         updates[`players/${current.owner}/score`] = Math.max((scores[current.owner]?.score || 1) - 1, 0);
+        //     }
+
+        //     updates[`players/${playerName}/score`] = (scores[playerName]?.score || 0) + 1;
+
+        //     update(ref(db), updates);
+        // };
+
+        window.keyPressed = function () {
+            if (gameFrozen) return;
+
+            // Only change direction if it's not already random.
+            if (sprite.direction === 'random') {
+                return;
+            }
+
+            if (key === 'w' || key === 'W') sprite.direction = 'up';
+            else if (key === 's' || key === 'S') sprite.direction = 'down';
+            else if (key === 'a' || key === 'A') sprite.direction = 'left';
+            else if (key === 'd' || key === 'D') sprite.direction = 'right';
+        };
+
+
+
+
+
+        function getRandomColor() {
+            return '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
+        }
+
+        function isColorDark(hex) {
+            const r = parseInt(hex.substr(1, 2), 16);
+            const g = parseInt(hex.substr(3, 2), 16);
+            const b = parseInt(hex.substr(5, 2), 16);
+            // Perceived brightness formula
+            const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+            return brightness < 128;
+        }
+
+
+        function updateLeaderboard() {
+            const scoreList = document.getElementById('scores');
+            scoreList.innerHTML = '';
+
+            const sorted = Object.entries(scores)
+                .map(([name, data]) => ({ name, score: data.score || 0, color: data.color }))
+                .sort((a, b) => b.score - a.score);
+
+            for (let player of sorted) {
+                const li = document.createElement('li');
+                li.textContent = `${player.name}: ${player.score}`;
+
+                // Fallback to local color if color is missing
+                if (player.color) {
+                    li.style.color = player.color;
+                } else if (player.name === playerName) {
+                    li.style.color = playerColor;
+                }
+
+                scoreList.appendChild(li);
+            }
+
+        }
+
+        // Admin functions
+        window.freezeGame = function () {
+            update(ref(db, "gameState"), { frozen: true });
+        };
+
+        window.unfreezeGame = function () {
+            update(ref(db, "gameState"), { frozen: false });
+        };
+
+
+        window.resetGame = function () {
+            if (confirm("Are you sure you want to reset the game? This cannot be undone.")) {
+                const tokenRef = ref(db, "gameState/adminToken");
+                onValue(tokenRef, (snap) => {
+                    const existingToken = snap.val();
+
+                    update(ref(db), {
+                        grid: {},
+                        players: null,
+                        gameState: {
+                            frozen: false,
+                            adminToken: existingToken
+                        }
+                    });
+
+                    // ✅ Clear local memory of player scores
+                    scores = {};
+                }, { onlyOnce: true });
+            }
+        };
+
+
+    </script>
+
+    <div id="adminPanel"
+        style="position: fixed; top: 10px; right: 10px; background: #fff; padding: 10px; border: 1px solid #ccc; display: none;">
+        <strong>Admin Controls</strong><br><br>
+        <button id="freezeBtn">Freeze</button>
+        <button id="unfreezeBtn">Unfreeze</button>
+        <button id="resetBtn">Reset</button>
+        <p>Status: <span id="gameStatus">...</span></p>
+    </div>
 </body>
+
 </html>
