@@ -134,6 +134,7 @@
             onValue(ref(db, 'grid'), (snapshot) => {
                 if (snapshot.exists()) {
                     grid = snapshot.val();
+                    recomputeScoresFromGrid(); // <- Add this line
                 }
             });
 
@@ -164,6 +165,29 @@
                     document.getElementById("gameStatus").innerText = statusText;
                 }
             });
+
+
+            function recomputeScoresFromGrid() {
+                const playerCellCounts = {};
+
+                for (let key in grid) {
+                    const cell = grid[key];
+                    if (cell && cell.owner) {
+                        if (!playerCellCounts[cell.owner]) {
+                            playerCellCounts[cell.owner] = 0;
+                        }
+                        playerCellCounts[cell.owner]++;
+                    }
+                }
+
+                const updates = {};
+                for (let player in scores) {
+                    updates[`players/${player}/score`] = playerCellCounts[player] || 0;
+                }
+
+                update(ref(db), updates);
+            }
+
 
             // Admin UI
             if (playerName.toLowerCase() === "admin") {
