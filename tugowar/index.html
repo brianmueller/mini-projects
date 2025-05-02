@@ -120,6 +120,13 @@
 
     function updateUI(position) {
         const offset = position - 500;
+        if (position <= 0) {
+            alert("Red Team Wins!");
+            return;
+        } else if (position >= 1000) {
+            alert("Blue Team Wins!");
+            return;
+        }
         document.getElementById('red-score').innerText = offset < 0 ? Math.abs(offset) : 0;
         document.getElementById('blue-score').innerText = offset > 0 ? offset : 0;
 
@@ -130,11 +137,7 @@
         const percentage = position / 1000;
         rope.style.left = `${percentage * maxOffset}px`;
 
-        if (position <= 0) {
-            alert("Red Team Wins!");
-        } else if (position >= 1000) {
-            alert("Blue Team Wins!");
-        }
+       
     }
   
     function pull(team) {
